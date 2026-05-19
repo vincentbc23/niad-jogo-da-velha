@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NIAD · Jogo da Velha com AlphaZero</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #050513;
+      --surface:      #0d0d2b;
+      --surface2:     #13133d;
+      --blue:         #1e40af;
+      --blue-light:   #60a5fa;
+      --purple:       #7c3aed;
+      --purple-light: #a78bfa;
+      --x-color:      #60a5fa;
+      --o-color:      #c084fc;
+      --text:         #f1f5f9;
+      --muted:        #64748b;
+      --border:       rgba(139,92,246,0.2);
+      --grad:         linear-gradient(135deg, #1e40af 0%, #7c3aed 100%);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 15% 15%, rgba(30,64,175,0.18) 0%, transparent 55%),
+        radial-gradient(ellipse at 85% 85%, rgba(124,58,237,0.18) 0%, transparent 55%);
+      pointer-events: none;
+    }
+
+    /* ── Screens ─────────────────────────────────────────── */
+    .screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.75rem;
+      width: 100%;
+      max-width: 480px;
+      padding: 2rem 1.25rem;
+      position: relative;
+      z-index: 1;
+    }
+    .screen.active { display: flex; }
+
+    /* ── NIAD Logo ───────────────────────────────────────── */
+    .logo-wrap { text-align: center; }
+    .logo-img {
+      height: 80px;
+      width: auto;
+      /* Inverte para exibir bem no fundo escuro */
+      filter: brightness(0) invert(1) drop-shadow(0 0 12px rgba(124,58,237,0.5));
+      margin-bottom: 0.5rem;
+      display: block;
+      margin-inline: auto;
+    }
+    .logo-sub {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .game-logo-img {
+      height: 28px;
+      width: auto;
+      filter: brightness(0) invert(1) drop-shadow(0 0 6px rgba(124,58,237,0.6));
+      display: block;
+    }
+
+    /* ── Selection screen ────────────────────────────────── */
+    .sel-title {
+      font-size: 0.9rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-align: center;
+    }
+    .choice-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      width: 100%;
+    }
+    .choice-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 2rem 1rem;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+      transition: all 0.25s ease;
+      color: var(--text);
+    }
+    .choice-btn:hover { background: var(--surface2); transform: translateY(-5px); }
+    .choice-btn.x-btn:hover { border-color: var(--x-color); box-shadow: 0 18px 40px rgba(96,165,250,0.25); }
+    .choice-btn.o-btn:hover { border-color: var(--o-color); box-shadow: 0 18px 40px rgba(192,132,252,0.25); }
+    .choice-icon { width: 72px; height: 72px; display: block; }
+    .choice-btn { outline: none; }
+    .choice-label { font-family: 'Orbitron', monospace; font-size: 1.6rem; font-weight: 700; }
+    .x-btn .choice-label { color: var(--x-color); }
+    .o-btn .choice-label { color: var(--o-color); }
+    .choice-sub { font-size: 0.72rem; color: var(--muted); }
+
+    /* ── Game screen ─────────────────────────────────────── */
+    .game-topbar {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .game-logo-sm {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.05rem;
+      font-weight: 900;
+      background: var(--grad);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: 0.12em;
+    }
+    .scoreboard {
+      display: flex;
+      gap: 0.9rem;
+      font-family: 'Orbitron', monospace;
+      font-size: 0.78rem;
+    }
+    .sc-x  { color: var(--x-color); }
+    .sc-o  { color: var(--o-color); }
+    .sc-d  { color: var(--muted); }
+
+    /* Status bar */
+    .status-bar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 0.8rem 1.5rem;
+      width: 100%;
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      font-size: 0.88rem;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--purple-light);
+      flex-shrink: 0;
+    }
+    .status-dot.pulse { animation: pulse 0.9s ease infinite; }
+    @keyframes pulse {
+      0%,100% { opacity:1; transform:scale(1); }
+      50%      { opacity:0.2; transform:scale(0.55); }
+    }
+
+    /* ── Board ───────────────────────────────────────────── */
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      background: rgba(99,102,241,0.08);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 12px;
+    }
+    .cell {
+      width: 116px; height: 116px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+    }
+    .cell.empty:not(.disabled):hover {
+      background: var(--surface2);
+      border-color: rgba(139,92,246,0.5);
+      transform: scale(1.04);
+    }
+    .cell.occupied, .cell.disabled { cursor: default; transform: none !important; }
+    .cell.winning {
+      background: rgba(124,58,237,0.18);
+      border-color: var(--purple-light);
+      animation: glow 1.6s ease infinite;
+    }
+    @keyframes glow {
+      0%,100% { box-shadow: 0 0 18px rgba(124,58,237,0.35); }
+      50%      { box-shadow: 0 0 32px rgba(124,58,237,0.7); }
+    }
+    .cell svg { width: 72px; height: 72px; }
+
+    /* X draw animation */
+    .x-line {
+      stroke: var(--x-color);
+      stroke-width: 7;
+      stroke-linecap: round;
+      stroke-dasharray: 85;
+      stroke-dashoffset: 85;
+      animation: drawLine 0.28s ease forwards;
+    }
+    .x-line:nth-child(2) { animation-delay: 0.12s; }
+    @keyframes drawLine { to { stroke-dashoffset: 0; } }
+
+    /* O draw animation */
+    .o-circle {
+      stroke: var(--o-color);
+      stroke-width: 7;
+      fill: none;
+      stroke-linecap: round;
+      stroke-dasharray: 192;
+      stroke-dashoffset: 192;
+      animation: drawCircle 0.38s ease forwards;
+    }
+    @keyframes drawCircle { to { stroke-dashoffset: 0; } }
+
+    /* ── Buttons ─────────────────────────────────────────── */
+    .btn {
+      background: var(--grad);
+      border: none;
+      border-radius: 14px;
+      padding: 0.9rem 2rem;
+      color: #fff;
+      font-family: 'Orbitron', monospace;
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.2s ease;
+    }
+    .btn:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(124,58,237,0.4); }
+    .btn:active { transform: translateY(0); }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 0.85rem 2rem;
+      color: var(--muted);
+      font-family: 'Orbitron', monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.2s ease;
+    }
+    .btn-ghost:hover { border-color: var(--purple); color: var(--text); }
+
+    /* ── Result overlay ──────────────────────────────────── */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(5,5,19,0.88);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .overlay.hidden { display: none; }
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 26px;
+      padding: 3rem 2.5rem;
+      text-align: center;
+      max-width: 360px;
+      width: 90%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.25rem;
+      animation: slideUp 0.35s ease;
+    }
+    @keyframes slideUp {
+      from { opacity:0; transform:translateY(30px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    .result-emoji { font-size: 4rem; line-height: 1; }
+    .result-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 1.55rem;
+      font-weight: 900;
+      background: var(--grad);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .result-sub { color: var(--muted); font-size: 0.82rem; line-height: 1.5; }
+    .result-btns { display: flex; flex-direction: column; gap: 0.7rem; width: 100%; margin-top: 0.5rem; }
+
+    /* ── Footer ──────────────────────────────────────────── */
+    .footer-note { font-size: 0.68rem; color: var(--muted); opacity: 0.45; text-align: center; }
+
+    /* ── Responsive ──────────────────────────────────────── */
+    @media (max-width: 420px) {
+      .cell { width: 96px; height: 96px; }
+      .cell svg { width: 58px; height: 58px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════ TELA DE SELEÇÃO ══════════════ -->
+<div id="screen-sel" class="screen active">
+
+  <div class="logo-wrap">
+    <img class="logo-img" src="/static/logo.png" alt="NIAD">
+    <p class="logo-sub">Núcleo de IA e Ciência de Dados · UFLA</p>
+  </div>
+
+  <p class="sel-title">Escolha seu símbolo para jogar</p>
+
+  <div class="choice-grid">
+    <button class="choice-btn x-btn" onclick="startGame(1)">
+      <svg class="choice-icon" viewBox="0 0 100 100" width="72" height="72">
+        <line x1="22" y1="22" x2="78" y2="78" stroke="#60a5fa" stroke-width="9" stroke-linecap="round"/>
+        <line x1="78" y1="22" x2="22" y2="78" stroke="#60a5fa" stroke-width="9" stroke-linecap="round"/>
+      </svg>
+      <span class="choice-label">X</span>
+      <span class="choice-sub">Primeiro a jogar</span>
+    </button>
+    <button class="choice-btn o-btn" onclick="startGame(-1)">
+      <svg class="choice-icon" viewBox="0 0 100 100" width="72" height="72">
+        <circle cx="50" cy="50" r="30" fill="none" stroke="#c084fc" stroke-width="9"/>
+      </svg>
+      <span class="choice-label">O</span>
+      <span class="choice-sub">Segundo a jogar</span>
+    </button>
+  </div>
+
+  <p class="footer-note">IA utiliza Monte Carlo Tree Search · 500 simulações por jogada</p>
+</div>
+
+<!-- ══════════════ TELA DE JOGO ══════════════ -->
+<div id="screen-game" class="screen">
+
+  <div class="game-topbar">
+    <img class="game-logo-img" src="/static/logo.png" alt="NIAD">
+    <div class="scoreboard">
+      <span class="sc-x">X&nbsp;<span id="sc-x">0</span></span>
+      <span class="sc-d">· <span id="sc-d">0</span> ·</span>
+      <span class="sc-o"><span id="sc-o">0</span>&nbsp;O</span>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <span class="status-dot" id="status-dot"></span>
+    <span id="status-text">Sua vez!</span>
+  </div>
+
+  <div class="board" id="board"></div>
+
+  <button class="btn" onclick="goToSelection()">Nova Partida</button>
+  <p class="footer-note">UFLA de Portas Abertas · 2025</p>
+</div>
+
+<!-- ══════════════ OVERLAY DE RESULTADO ══════════════ -->
+<div id="overlay" class="overlay hidden">
+  <div class="result-card">
+    <span class="result-emoji" id="res-emoji">🎉</span>
+    <span class="result-title" id="res-title">Você Ganhou!</span>
+    <p class="result-sub" id="res-sub"></p>
+    <div class="result-btns">
+      <button class="btn"       onclick="playAgain()">Jogar Novamente</button>
+      <button class="btn-ghost" onclick="goToSelection()">Mudar de Símbolo</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let playerPiece = 1;
+  let active = false;
+  const scores = { x: 0, o: 0, d: 0 };
+
+  /* ─── Board ─────────────────────────────────────── */
+  function buildBoard() {
+    const board = document.getElementById('board');
+    board.innerHTML = '';
+    for (let i = 0; i < 9; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell empty';
+      cell.dataset.i = i;
+      cell.addEventListener('click', () => clickCell(i));
+      board.appendChild(cell);
+    }
+  }
+
+  function renderState(state, winning = []) {
+    document.querySelectorAll('.cell').forEach((cell, i) => {
+      const v = state[Math.floor(i / 3)][i % 3];
+      cell.innerHTML = '';
+      cell.className = 'cell';
+
+      if (v === 1) {
+        cell.classList.add('occupied');
+        cell.innerHTML = `<svg viewBox="0 0 100 100">
+          <line class="x-line" x1="22" y1="22" x2="78" y2="78"/>
+          <line class="x-line" x1="78" y1="22" x2="22" y2="78"/>
+        </svg>`;
+      } else if (v === -1) {
+        cell.classList.add('occupied');
+        cell.innerHTML = `<svg viewBox="0 0 100 100">
+          <circle class="o-circle" cx="50" cy="50" r="30"/>
+        </svg>`;
+      } else {
+        cell.classList.add('empty');
+      }
+
+      if (winning.includes(i)) cell.classList.add('winning');
+    });
+  }
+
+  /* ─── Status ─────────────────────────────────────── */
+  function setStatus(msg, thinking = false) {
+    document.getElementById('status-text').textContent = msg;
+    document.getElementById('status-dot').classList.toggle('pulse', thinking);
+  }
+
+  function lockBoard()   { active = false; document.querySelectorAll('.cell').forEach(c => c.classList.add('disabled')); }
+  function unlockBoard() { active = true;  document.querySelectorAll('.cell.empty').forEach(c => c.classList.remove('disabled')); }
+
+  /* ─── Score ──────────────────────────────────────── */
+  function updateScore() {
+    document.getElementById('sc-x').textContent = scores.x;
+    document.getElementById('sc-o').textContent = scores.o;
+    document.getElementById('sc-d').textContent = scores.d;
+  }
+
+  /* ─── Game flow ──────────────────────────────────── */
+  async function startGame(piece) {
+    playerPiece = piece;
+    document.getElementById('screen-sel').classList.remove('active');
+    document.getElementById('screen-game').classList.add('active');
+    buildBoard();
+
+    const symbol = piece === 1 ? 'X' : 'O';
+    setStatus('IA pensando...', true);
+
+    const data = await post('/new_game', { player: piece });
+    renderState(data.state, data.winning_cells);
+
+    if (data.game_over) {
+      handleEnd(data.winner, data.winning_cells);
+    } else {
+      setStatus(`Sua vez! Você é o ${symbol}`);
+      unlockBoard();
+    }
+  }
+
+  async function clickCell(idx) {
+    if (!active) return;
+    const cell = document.querySelectorAll('.cell')[idx];
+    if (!cell.classList.contains('empty')) return;
+
+    lockBoard();
+    setStatus('IA pensando...', true);
+
+    const data = await post('/move', { action: idx });
+
+    if (data.error) { setStatus('Erro! Tente novamente.'); unlockBoard(); return; }
+
+    renderState(data.state, data.winning_cells);
+
+    if (data.game_over) {
+      handleEnd(data.winner, data.winning_cells);
+    } else {
+      const symbol = playerPiece === 1 ? 'X' : 'O';
+      setStatus(`Sua vez! Você é o ${symbol}`);
+      unlockBoard();
+    }
+  }
+
+  function handleEnd(winner, winning) {
+    lockBoard();
+
+    if      (winner === 0)            scores.d++;
+    else if (winner === 1)            scores.x++;
+    else                              scores.o++;
+    updateScore();
+
+    let emoji, title, sub;
+    if (winner === 0) {
+      emoji = '🤝'; title = 'Empate!';
+      sub = 'Nenhum venceu dessa vez. Tente de novo!';
+    } else if (winner === playerPiece) {
+      emoji = '🎉'; title = 'Você Ganhou!';
+      sub = 'Impressionante! Você derrotou a IA do NIAD.';
+    } else {
+      emoji = '🤖'; title = 'IA Venceu!';
+      sub = 'O MCTS é muito bom! Que tal tentar novamente?';
+    }
+
+    setTimeout(() => {
+      document.getElementById('res-emoji').textContent = emoji;
+      document.getElementById('res-title').textContent = title;
+      document.getElementById('res-sub').textContent   = sub;
+      document.getElementById('overlay').classList.remove('hidden');
+    }, 750);
+  }
+
+  async function playAgain() {
+    document.getElementById('overlay').classList.add('hidden');
+    await startGame(playerPiece);
+  }
+
+  function goToSelection() {
+    document.getElementById('overlay').classList.add('hidden');
+    document.getElementById('screen-game').classList.remove('active');
+    document.getElementById('screen-sel').classList.add('active');
+    active = false;
+  }
+
+  /* ─── Helper ─────────────────────────────────────── */
+  async function post(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+</script>
+</body>
+</html>
